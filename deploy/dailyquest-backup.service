@@ -1,0 +1,11 @@
+[Unit]
+Description=Encrypted Daily Quest PostgreSQL backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/daily-quest
+EnvironmentFile=/etc/dailyquest/backup.env
+ExecStart=/bin/bash /opt/daily-quest/scripts/backup.sh
+UMask=0077

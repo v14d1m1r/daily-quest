@@ -1,0 +1,32 @@
+# Include within nginx http {} (e.g. sites-enabled). Certificate must exist first.
+limit_req_zone $binary_remote_addr zone=dailyquest_auth:10m rate=5r/m;
+server {
+    listen 80;
+    server_name dailyquest.v14d1m1r.net;
+    location / { return 301 https://$host$request_uri; }
+}
+server {
+    listen 443 ssl;
+    server_name dailyquest.v14d1m1r.net;
+    ssl_certificate /etc/letsencrypt/live/dailyquest.v14d1m1r.net/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/dailyquest.v14d1m1r.net/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    client_max_body_size 16k;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy same-origin always;
+    add_header X-Frame-Options DENY always;
+    location /api/auth/ {
+        limit_req zone=dailyquest_auth burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $remote_addr;
+    }
+    location / {
+        proxy_pass http://127.0.0.1:3080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $remote_addr;
+    }
+}

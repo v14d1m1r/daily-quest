@@ -1,0 +1,58 @@
+name: dailyquest
+services:
+  app:
+    image: dailyquest:${APP_TAG:?Set APP_TAG in .env.production}
+    build: .
+    environment:
+      DATABASE_URL: postgres://dailyquest:${POSTGRES_PASSWORD:?Generate a hex password}@db:5432/dailyquest
+      BIND_ADDRESS: 0.0.0.0:3000
+      COOKIE_SECURE: "true"
+      REGISTRATION_ENABLED: "false"
+      RUST_LOG: daily_quest=info,tower_http=warn
+    ports:
+      - "127.0.0.1:${APP_PORT:-3080}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --max-time, "5", http://127.0.0.1:3000/api/health]
+      interval: 30s
+      timeout: 6s
+      start_period: 30s
+      retries: 3
+    logging: &logs
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks: [database, edge]
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: dailyquest
+      POSTGRES_DB: dailyquest
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate a hex password}
+    volumes:
+      - database:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U dailyquest -d dailyquest"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    logging: *logs
+    networks: [database]
+networks:
+  database:
+    internal: true
+  edge:
+volumes:
+  database:
