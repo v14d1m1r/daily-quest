@@ -1,6 +1,6 @@
 # Daily Quest na postojećem Linode serveru
 
-Ove datoteke su priprema za deploy; ništa nije menjano na Linode-u. Produkcijski Compose je **zaseban** od razvojnog. Sve komande ispod izvršavati iz `/opt/daily-quest` osim gde piše drugačije. Potrebni su Docker Engine/Compose v2, Python 3, OpenSSL, `age` i `flock` (util-linux). Koristi `sudo` gde server zahteva; Docker pristup je privilegovan pristup serveru.
+Aplikacija je objavljena na **https://dailyquest.v14d1m1r.net**. Korisnik je 19. oktobra 2026. potvrdio da aplikacija i HTTPS rade. Aktivni reverse proxy je **Caddy u Docker-u**, ne host Nginx. Produkcijski Compose je **zaseban** od razvojnog. Sve komande ispod izvršavati iz `/opt/daily-quest` osim gde piše drugačije. Potrebni su Docker Engine/Compose v2, Python 3, OpenSSL, `age` i `flock` (util-linux). Koristi `sudo` gde server zahteva; Docker pristup je privilegovan pristup serveru.
 
 ## 1. Pre pokretanja
 
@@ -32,11 +32,63 @@ Migracije se primenjuju automatski pri pokretanju. Baza je u trajnom volume-u pr
 
 ## 2. Povezivanje na HTTPS
 
-Izaberi postojeći proxy, **ne pokreći drugi na istim portovima**:
+Za ovaj server koristi postojeći kontejner `linode-caddy-1` i mrežu `linode_default`. Portove 80/443 već drži Caddy; **ne pokretati host Nginx niti Certbot za Daily Quest**. `nginx.conf.example` i host `Caddyfile.example` ostaju samo primeri za druga okruženja.
 
-- Host Caddy: uklopi `Caddyfile.example`, proveri `caddy validate --config /etc/caddy/Caddyfile`, pa reload. DNS i 80/443 moraju biti dostupni za automatski sertifikat.
-- Host Nginx: primer `nginx.conf.example` očekuje već izdat sertifikat. Koristi postojeći Certbot/ACME postupak; za početno izdavanje koristi privremeni HTTP-only vhost sa ACME webroot-om ili DNS challenge. Tek zatim uključi TLS primer, proveri `nginx -t` i reload. Sačuvaj postojeće vhost-ove. Nginx primer ima dodatno ograničenje auth zahteva po IP-u.
-- Ako proxy radi u Docker-u: `127.0.0.1` u njemu nije host. Priključi app na postojeću proxy Docker mrežu preko dodatnog Compose override-a i dodeli jedinstveni alias `dailyquest-app`; upstream je `dailyquest-app:3000`. Bazu ostavi samo na internoj database mreži. Prilagodi sve production.sh komande da uvek uključuju isti override.
+| Stavka | Vrednost |
+| --- | --- |
+| Projekat | `/opt/daily-quest` |
+| Caddy kontejner | `linode-caddy-1` |
+| Caddy Compose direktorijum | `/opt/trainer-platform/infra/linode` |
+| Caddyfile na hostu | `/opt/trainer-platform/infra/linode/Caddyfile` |
+| Caddyfile u kontejneru | `/etc/caddy/Caddyfile` |
+| Zajednička mreža | `linode_default` |
+| Upstream | `dailyquest-app:3000` |
+| Lokalni port za dijagnostiku | `127.0.0.1:3080` |
+
+Za prvo povezivanje kopiraj primer u serverski override (ne prepisuj postojeći prilagođeni fajl):
+
+```bash
+cp compose.proxy.yaml.example compose.proxy.yaml
+bash scripts/production.sh config --quiet
+bash scripts/production.sh up -d --no-build --no-deps --wait app
+docker exec linode-caddy-1 wget -qO- http://dailyquest-app:3000/api/health
+```
+
+`scripts/production.sh` automatski uključuje `compose.proxy.yaml` ako postoji. Zadrži ga na serveru pri svakom ažuriranju; fajl je ignorisan u Git-u. Samo app dobija alias `dailyquest-app` na zajedničkoj mreži. Baza ostaje na internoj mreži projekta. `127.0.0.1:3080` nije upstream za Caddy kontejner: tamo localhost označava sam Caddy kontejner.
+
+Sačuvaj kopiju postojećeg Caddyfile-a pre izmene. Sledeći zaseban blok dodat je uz postojeći trainer blok; **ne dodavati ga ponovo ako već postoji**:
+
+```caddyfile
+dailyquest.v14d1m1r.net {
+    encode zstd gzip
+    reverse_proxy dailyquest-app:3000
+}
+```
+
+Daily Quest očekuje `/api` prefiks, pa za njega ne kopirati `uri strip_prefix /api` iz trainer konfiguracije. Posle izmene proveri da kontejner vidi novi blok, validiraj i tek onda uradi reload:
+
+```bash
+docker exec linode-caddy-1 tail -n 20 /etc/caddy/Caddyfile
+docker exec linode-caddy-1 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+# Samo posle uspešne validacije:
+docker exec linode-caddy-1 caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+curl --fail https://dailyquest.v14d1m1r.net/api/health
+curl --fail https://dailyquest.v14d1m1r.net/api/config
+```
+
+Caddy upravlja HTTPS sertifikatom kroz svoje postojeće trajne volumene. Koristi reload bez restartovanja zajedničkog proxy-ja. Proveri i da postojeći sajtovi i dalje rade.
+
+### Ako HTTPS ne proradi
+
+- `nginx.service is not active` / `Address already in use`: ovaj server koristi Docker Caddy na 80/443; ne pokreći drugi proxy.
+- `tlsv1 alert internal error` uz Caddy log `config is unchanged`: proveri da Daily Quest blok zaista postoji u oba fajla. U ovom deploy-u blok je nedostajao; dodavanje i reload rešili su problem. Sama TLS poruka ne dokazuje uzrok.
+- Ako host ima novi blok, a kontejner ga nema, moguće je da je editor zamenio inode pojedinačno montiranog fajla. Sačuvaj izmenjeni sadržaj i upiši ga u originalni montirani fajl bez zamene inode-a ili planiraj prelazak na mount direktorijuma.
+- Ako interni health zahtev ne radi, proveri override i članstvo app kontejnera u `linode_default` mreži.
+- Za grešku sertifikata proveri DNS A/AAAA zapise, dostupnost 80/443 i sveže logove:
+
+```bash
+docker logs --since=5m --tail=60 linode-caddy-1
+```
 
 `COOKIE_SECURE=true` je obavezan. Za svakodnevnu prijavu koristi samo `https://dailyquest.v14d1m1r.net`, ne direktni HTTP port.
 
@@ -81,7 +133,7 @@ Vraća u novu privremenu bazu, proverava dostupnost ključnih tabela i ispisuje 
 1. Sačuvaj stari APP_TAG, Git reviziju, env konfiguraciju i image. Ne prepisuj isti tag za novu verziju.
 2. Napravi i kopiraj backup van servera.
 3. Preuzmi novu proverenu reviziju i promeni APP_TAG. Izgradi novi image ili učitaj već izgrađen.
-4. `bash scripts/production.sh up -d --no-build --wait app` (ne menja db servis). Proveri health i glavne tokove. Ako health ne prolazi, pogledaj `bash scripts/production.sh logs --tail=100 app`.
+4. `bash scripts/production.sh up -d --no-build --no-deps --wait app` (ne pokreće niti ponovo kreira db servis). Proveri health i glavne tokove. Ako health ne prolazi, pogledaj `bash scripts/production.sh logs --tail=100 app`.
 5. Za kompatibilnu šemu: vrati stari tag i ponovi `up -d --no-build --wait app`.
 6. Ako migracije nisu kompatibilne sa starim image-om: zastoj, svež backup trenutnog stanja, stara revizija i image, zatim kontrolisano vraćanje pre-deploy backupa. Time se gube upisi nastali posle backupa; odluka mora biti svesna.
 
@@ -102,10 +154,14 @@ Restore prvo proverava arhivu u privremenoj bazi, zahteva eksplicitnu potvrdu, z
 - Base image tagovi su fiksirani na seriju, ne digest; za strogo ponovljive release-e pinuj proverene image digest-e. PostgreSQL major upgrade nije automatski: koristi odgovarajući dump/restore ili pg_upgrade postupak.
 - Nema email reset-a, verifikacije emaila, javne registracije ili automatske off-site isporuke dok ih posebno ne konfigurišeš.
 
-## Status lokalne provere
+## Status provera
 
 Prošli su Rust testovi i Clippy, frontend build, parsiranje produkcijskog Compose-a i shell sintaksa skripti. Test zatvorene registracije ne zahteva bazu i proverava odbijanje na samom API-ju.
 
-Korisnik je prijavio da je izvršio Docker build komandu; image nije nezavisno pregledan jer Docker socket zahteva sudo. Provera nad lokalnom razvojnom bazom je prošla: zatvorena registracija, administratorsko kreiranje naloga, prijava, reset lozinke, poništavanje starih sesija i odjava. Još nisu potvrđeni: pokretanje produkcijskog kontejnera, izvršavanje age backup-a i stvarni restore. `age` nije instaliran u razvojnom okruženju. Ne smatrati ove provere završenim pre deploy-a.
+Potvrđeno lokalnim integracionim testom: zatvorena registracija, administratorsko kreiranje naloga, prijava, reset lozinke, poništavanje starih sesija i odjava.
+
+Potvrđeno prema izlazima sa servera i korisnikovoj završnoj potvrdi od 19. oktobra 2026: produkcijski kontejneri su pokrenuti, app je povezan sa postojećim Caddy-jem i aplikacija radi preko HTTPS-a. Nije obavljena nezavisna vizuelna provera browserom.
+
+Još nije potvrđeno: izvršavanje šifrovanog backup-a, automatski raspored, isporuka kopije van servera i stvarni restore. Ove provere ostaju sledeći operativni korak po odeljku 3.
 
 Za lokalnu proveru admin komandi: pokreni razvojnu bazu (`sudo docker compose up -d --wait db`), zatim `BIND_ADDRESS=127.0.0.1:3099 REGISTRATION_ENABLED=false cargo run` i u drugom terminalu `python3 scripts/deployment_smoke.py`. Skripta pravi poseban test nalog u razvojnoj bazi. Za produkcijski image: `sudo docker build -t dailyquest:deployment-test .`. Zatim proveri backup i restore po odeljku 3, pre unošenja pravih podataka.

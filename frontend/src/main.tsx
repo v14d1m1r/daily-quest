@@ -40,7 +40,12 @@ type User = {
   timezone: string;
   water_goal_ml: number;
 };
-type Entry = { id: string; amount_ml: number; consumed_at: string };
+type Entry = {
+  id: string;
+  amount_ml: number;
+  notes: string;
+  consumed_at: string;
+};
 type Summary = {
   date: string;
   total_ml: number;
@@ -458,240 +463,244 @@ function Dashboard({ user }: { user: User }) {
               </button>
             ) : (
               <>
-                <div className="overview-grid">
-                  <section className="water-card">
-                    <div className="card-top">
-                      <div className="card-title">
-                        <span className="icon-tile">
-                          <Droplets size={21} />
+                <div className="water-sections">
+                  <div className="overview-grid">
+                    <section className="water-card">
+                      <div className="card-top">
+                        <div className="card-title">
+                          <span className="icon-tile">
+                            <Droplets size={21} />
+                          </span>
+                          <div>
+                            <h2>Voda</h2>
+                            <span>Tvoja dnevna hidratacija</span>
+                          </div>
+                        </div>
+                        <span className="pill">
+                          {progress >= 100 ? "Cilj ispunjen" : "Dnevni cilj"}
                         </span>
-                        <div>
-                          <h2>Voda</h2>
-                          <span>Tvoja dnevna hidratacija</span>
+                      </div>
+                      <div className="water-center">
+                        <div className="water-stat">
+                          <span className="eyebrow">
+                            {date === today
+                              ? "DANAS POPIJENO"
+                              : "UKUPNO POPIJENO"}
+                          </span>
+                          <div className="big-number">
+                            {liters(total)}
+                            <span> / {liters(goal)} l</span>
+                          </div>
+                          <p>
+                            {remaining > 0
+                              ? `Još ${liters(remaining)} l do tvog cilja.`
+                              : "Bravo! Ostvario si svoj dnevni cilj."}
+                          </p>
                         </div>
-                      </div>
-                      <span className="pill">
-                        {progress >= 100 ? "Cilj ispunjen" : "Dnevni cilj"}
-                      </span>
-                    </div>
-                    <div className="water-center">
-                      <div className="water-stat">
-                        <span className="eyebrow">
-                          {date === today
-                            ? "DANAS POPIJENO"
-                            : "UKUPNO POPIJENO"}
-                        </span>
-                        <div className="big-number">
-                          {liters(total)}
-                          <span> / {liters(goal)} l</span>
-                        </div>
-                        <p>
-                          {remaining > 0
-                            ? `Još ${liters(remaining)} l do tvog cilja.`
-                            : "Bravo! Ostvario si svoj dnevni cilj."}
-                        </p>
-                      </div>
-                      <div
-                        className="water-orb"
-                        style={
-                          {
-                            "--fill": `${Math.min(progress, 100)}%`,
-                          } as React.CSSProperties
-                        }
-                      >
-                        <div className="orb-water" />
-                        <div className="orb-content">
-                          <Droplets size={25} />
-                          <strong>{progress}%</strong>
-                          <span>tvog cilja</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="quick-label">
-                      BRZI UNOS <span>jedna čaša bliže cilju</span>
-                    </div>
-                    <div className="quick-actions">
-                      {[150, 250, 500].map((amount) => (
-                        <button
-                          key={amount}
-                          disabled={date !== today || add.isPending}
-                          onClick={() => add.mutate(amount)}
-                        >
-                          <Plus size={16} />
-                          {amount} ml
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      className="water-custom"
-                      onClick={() => openWater()}
-                    >
-                      <Plus size={17} />
-                      Unesi količinu i vreme
-                      <ArrowUpRight size={17} />
-                    </button>
-                    {date !== today && (
-                      <small className="past-hint">
-                        Za prethodni dan koristi unos količine i vremena.
-                      </small>
-                    )}
-                  </section>
-                  <section className="panel week-card">
-                    <div className="card-top">
-                      <div>
-                        <h2>Korak po korak</h2>
-                        <p>Unos vode · poslednjih 7 dana</p>
-                      </div>
-                      <span className="trend-icon">
-                        <Droplets size={20} />
-                      </span>
-                    </div>
-                    <div className="week-summary">
-                      <strong>
-                        {liters(
-                          (data?.week.reduce((n, d) => n + d.total_ml, 0) ||
-                            0) / 7,
-                        )}{" "}
-                        <span>l / dan</span>
-                      </strong>
-                      <span>prosečan unos</span>
-                    </div>
-                    <div
-                      className="chart"
-                      aria-label="Unos vode u poslednjih sedam dana"
-                    >
-                      {data?.week.map((day) => (
-                        <button
-                          className={
-                            day.date === date
-                              ? "chart-column selected"
-                              : "chart-column"
+                        <div
+                          className="water-orb"
+                          style={
+                            {
+                              "--fill": `${Math.min(progress, 100)}%`,
+                            } as React.CSSProperties
                           }
-                          key={day.date}
-                          onClick={() => setDate(day.date)}
-                          aria-label={`${day.date}: ${day.total_ml} ml`}
                         >
-                          <span className="bar-value">
-                            {liters(day.total_ml)}
-                          </span>
-                          <div className="bar-track">
-                            <div
-                              className="bar"
-                              style={{
-                                height: `${Math.max(3, (day.total_ml / Math.max(goal, ...data.week.map((d) => d.total_ml))) * 100)}%`,
-                              }}
-                            />
-                          </div>
-                          <span className="bar-day">
-                            {friendlyDate(day.date, {
-                              weekday: "short",
-                            }).replace(".", "")}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                    <div className="chart-footer">
-                      <span>
-                        <i />
-                        Dnevni unos u litrima
-                      </span>
-                      <button
-                        className="text-button"
-                        onClick={() => setModal("settings")}
-                      >
-                        Cilj: {liters(goal)} l <Pencil size={12} />
-                      </button>
-                    </div>
-                  </section>
-                </div>
-                <section className="panel entries-card">
-                  <div className="card-top">
-                    <div>
-                      <h2>
-                        Mali koraci, zabeleženi{" "}
-                        <span className="count">{data?.entries.length}</span>
-                      </h2>
-                      <p>
-                        {date === today
-                          ? "Tvoji današnji unosi vode."
-                          : "Unosi vode za izabrani dan."}
-                      </p>
-                    </div>
-                    <button className="secondary" onClick={() => openWater()}>
-                      <Plus size={16} />
-                      Dodaj unos
-                    </button>
-                  </div>
-                  {data?.entries.length ? (
-                    <div className="entries">
-                      <div className="table-heading">
-                        <span>AKTIVNOST</span>
-                        <span>VREME</span>
-                        <span>KOLIČINA</span>
-                        <span />
-                      </div>
-                      {data.entries.map((entry) => (
-                        <div className="entry-row" key={entry.id}>
-                          <div className="entry-name">
-                            <span className="entry-icon">
-                              <GlassWater size={18} />
-                            </span>
-                            <div>
-                              <strong>Čaša vode</strong>
-                              <small>Ručni unos</small>
-                            </div>
-                          </div>
-                          <span className="entry-time">
-                            {timeInZone(
-                              new Date(entry.consumed_at),
-                              user.timezone,
-                            )}
-                          </span>
-                          <strong className="entry-amount">
-                            + {entry.amount_ml} <span>ml</span>
-                          </strong>
-                          <div className="entry-actions">
-                            <button
-                              className="icon-button"
-                              aria-label={`Izmeni unos od ${entry.amount_ml} ml`}
-                              onClick={() => openWater(entry)}
-                            >
-                              <Pencil size={15} />
-                            </button>
-                            <button
-                              className="icon-button delete"
-                              aria-label={`Obriši unos od ${entry.amount_ml} ml`}
-                              disabled={remove.isPending}
-                              onClick={() => {
-                                if (window.confirm("Obrisati ovaj unos vode?"))
-                                  remove.mutate(entry.id);
-                              }}
-                            >
-                              <Trash2 size={15} />
-                            </button>
+                          <div className="orb-water" />
+                          <div className="orb-content">
+                            <Droplets size={25} />
+                            <strong>{progress}%</strong>
+                            <span>tvog cilja</span>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="empty">
-                      <span className="empty-icon">
-                        <GlassWater size={28} />
-                      </span>
-                      <h3>Prva čaša je dobar početak.</h3>
-                      <p>
-                        Još nema unosa za ovaj dan. Dodaj vodu i prati svoj
-                        napredak.
-                      </p>
+                      </div>
+                      <div className="quick-label">
+                        BRZI UNOS <span>jedna čaša bliže cilju</span>
+                      </div>
+                      <div className="quick-actions">
+                        {[250, 330, 500].map((amount) => (
+                          <button
+                            key={amount}
+                            disabled={date !== today || add.isPending}
+                            onClick={() => add.mutate(amount)}
+                          >
+                            <Plus size={16} />
+                            {amount} ml
+                          </button>
+                        ))}
+                      </div>
                       <button
-                        className="text-button"
+                        className="water-custom"
                         onClick={() => openWater()}
                       >
-                        Dodaj prvi unos <ArrowUpRight size={16} />
+                        <Plus size={17} />
+                        Unesi količinu i vreme
+                        <ArrowUpRight size={17} />
+                      </button>
+                      {date !== today && (
+                        <small className="past-hint">
+                          Za prethodni dan koristi unos količine i vremena.
+                        </small>
+                      )}
+                    </section>
+                    <section className="panel week-card">
+                      <div className="card-top">
+                        <div>
+                          <h2>Korak po korak</h2>
+                          <p>Unos vode · poslednjih 7 dana</p>
+                        </div>
+                        <span className="trend-icon">
+                          <Droplets size={20} />
+                        </span>
+                      </div>
+                      <div className="week-summary">
+                        <strong>
+                          {liters(
+                            (data?.week.reduce((n, d) => n + d.total_ml, 0) ||
+                              0) / 7,
+                          )}{" "}
+                          <span>l / dan</span>
+                        </strong>
+                        <span>prosečan unos</span>
+                      </div>
+                      <div
+                        className="chart"
+                        aria-label="Unos vode u poslednjih sedam dana"
+                      >
+                        {data?.week.map((day) => (
+                          <button
+                            className={
+                              day.date === date
+                                ? "chart-column selected"
+                                : "chart-column"
+                            }
+                            key={day.date}
+                            onClick={() => setDate(day.date)}
+                            aria-label={`${day.date}: ${day.total_ml} ml`}
+                          >
+                            <span className="bar-value">
+                              {liters(day.total_ml)}
+                            </span>
+                            <div className="bar-track">
+                              <div
+                                className="bar"
+                                style={{
+                                  height: `${Math.max(3, (day.total_ml / Math.max(goal, ...data.week.map((d) => d.total_ml))) * 100)}%`,
+                                }}
+                              />
+                            </div>
+                            <span className="bar-day">
+                              {friendlyDate(day.date, {
+                                weekday: "short",
+                              }).replace(".", "")}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="chart-footer">
+                        <span>
+                          <i />
+                          Dnevni unos u litrima
+                        </span>
+                        <button
+                          className="text-button"
+                          onClick={() => setModal("settings")}
+                        >
+                          Cilj: {liters(goal)} l <Pencil size={12} />
+                        </button>
+                      </div>
+                    </section>
+                  </div>
+                  <section className="panel entries-card">
+                    <div className="card-top">
+                      <div>
+                        <h2>
+                          Mali koraci, zabeleženi{" "}
+                          <span className="count">{data?.entries.length}</span>
+                        </h2>
+                        <p>
+                          {date === today
+                            ? "Tvoji današnji unosi vode."
+                            : "Unosi vode za izabrani dan."}
+                        </p>
+                      </div>
+                      <button className="secondary" onClick={() => openWater()}>
+                        <Plus size={16} />
+                        Dodaj unos
                       </button>
                     </div>
-                  )}
-                </section>
+                    {data?.entries.length ? (
+                      <div className="entries">
+                        <div className="table-heading">
+                          <span>AKTIVNOST</span>
+                          <span>VREME</span>
+                          <span>KOLIČINA</span>
+                          <span />
+                        </div>
+                        {data.entries.map((entry) => (
+                          <div className="entry-row" key={entry.id}>
+                            <div className="entry-name">
+                              <span className="entry-icon">
+                                <GlassWater size={18} />
+                              </span>
+                              <div>
+                                <strong>Čaša vode</strong>
+                                <small>{entry.notes || "Ručni unos"}</small>
+                              </div>
+                            </div>
+                            <span className="entry-time">
+                              {timeInZone(
+                                new Date(entry.consumed_at),
+                                user.timezone,
+                              )}
+                            </span>
+                            <strong className="entry-amount">
+                              + {entry.amount_ml} <span>ml</span>
+                            </strong>
+                            <div className="entry-actions">
+                              <button
+                                className="icon-button"
+                                aria-label={`Izmeni unos od ${entry.amount_ml} ml`}
+                                onClick={() => openWater(entry)}
+                              >
+                                <Pencil size={15} />
+                              </button>
+                              <button
+                                className="icon-button delete"
+                                aria-label={`Obriši unos od ${entry.amount_ml} ml`}
+                                disabled={remove.isPending}
+                                onClick={() => {
+                                  if (
+                                    window.confirm("Obrisati ovaj unos vode?")
+                                  )
+                                    remove.mutate(entry.id);
+                                }}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="empty">
+                        <span className="empty-icon">
+                          <GlassWater size={28} />
+                        </span>
+                        <h3>Prva čaša je dobar početak.</h3>
+                        <p>
+                          Još nema unosa za ovaj dan. Dodaj vodu i prati svoj
+                          napredak.
+                        </p>
+                        <button
+                          className="text-button"
+                          onClick={() => openWater()}
+                        >
+                          Dodaj prvi unos <ArrowUpRight size={16} />
+                        </button>
+                      </div>
+                    )}
+                  </section>
+                </div>
                 <div className="bottom-note">
                   <Leaf size={18} />
                   <span>
@@ -819,6 +828,7 @@ function WaterForm({
         try {
           save.mutate({
             amount_ml: Number(f.get("amount")),
+            notes: f.get("notes"),
             consumed_at: zonedISO(
               String(f.get("date")),
               String(f.get("time")),
@@ -864,6 +874,16 @@ function WaterForm({
         </label>
       </div>
       <small className="timezone">Vreme u zoni {user.timezone}</small>
+      <label>
+        Napomena <span className="optional">opciono</span>
+        <textarea
+          name="notes"
+          rows={3}
+          maxLength={2000}
+          defaultValue={entry?.notes || ""}
+          placeholder="Nešto što želiš da zapamtiš…"
+        />
+      </label>
       <ErrorMessage error={error || save.error} />
       <button className="primary" disabled={save.isPending}>
         {save.isPending ? "Čuvanje…" : entry ? "Sačuvaj izmene" : "Dodaj vodu"}

@@ -6,18 +6,23 @@ Lični dnevnik navika: Rust API + PostgreSQL + React/TypeScript interfejs prilag
 
 - Registracija, prijava i odjava; lozinke se čuvaju kao Argon2 hash.
 - HttpOnly sesije koje traju 30 dana; podaci su odvojeni po korisniku.
-- Voda: brzi unos 150/250/500 ml, proizvoljna količina, datum i vreme, izmena i brisanje.
+- Voda: brzi unos 250/330/500 ml, proizvoljna količina, datum, vreme i opciona napomena, izmena i brisanje.
 - Dnevni cilj, istorija po datumima i sedmodnevni grafikon.
 - Vremenska zona naloga; lokalni dani se računaju u backend-u, uključujući DST.
 - Ishrana: doručak, ručak, večera i užina; naziv, opciona količina i beleška, vreme, izmena i brisanje. Pregled na „Moj dan” i posebnom ekranu „Ishrana”.
 - Zadaci: naziv, beleška, prioritet, opcioni rok, završavanje i ponovno otvaranje, izmena i brisanje.
 - Liste: kreiranje, preimenovanje i brisanje uz očuvanje zadataka.
 - Pregledi zadataka: dan, nedelja (ponedeljak–nedelja), mesec i sve; filteri po listi i statusu. „Moj dan” prikazuje nezavršene zadatke do izabranog datuma.
+- Svetla i tamna tema, sa pamćenjem izbora u browseru.
 - Adaptivan interfejs na srpskom. Ponavljajući zadaci još nisu implementirani.
 
 ## Produkcija
 
-Pripremljeni su Dockerfile, zasebni produkcijski Compose, zatvorena registracija, administratorske komande i šifrovan backup. Uputstvo: [deploy/README.md](deploy/README.md).
+Aplikacija je dostupna na **https://dailyquest.v14d1m1r.net**. Korisnik je potvrdio uspešan deploy i HTTPS 19. oktobra 2026.
+
+Na Linode-u radi u Docker-u iza postojećeg Caddy proxy-ja (`linode-caddy-1`). Registracija je zatvorena; nalozi se kreiraju administratorskom komandom. Produkcijski Compose je odvojen od lokalnog razvojnog okruženja.
+
+Postupak održavanja, mrežna konfiguracija i backup: [deploy/README.md](deploy/README.md). Backup skripte su pripremljene, ali izvršavanje šifrovanog backup-a, isporuka kopije van servera i probni restore još nisu potvrđeni.
 
 ## Lokalno pokretanje
 
@@ -72,8 +77,11 @@ src/meals.rs         Dnevnik ishrane, validacija i pristup obrocima
 src/tasks.rs         Zadaci i korisničke liste
 migrations/          Verzije šeme PostgreSQL baze
 frontend/src/        React interfejs i stilovi
-scripts/             Integraciona provera API-ja
+scripts/             Testovi, produkcijske komande, upravljanje nalozima i backup
 compose.yaml         Lokalna PostgreSQL baza
+compose.production.yaml  Produkcijska aplikacija i baza
+compose.proxy.yaml.example  Veza sa postojećom Caddy Docker mrežom
+deploy/README.md     Deploy, održavanje i oporavak
 openapi.json         API ugovor za web i budući Android klijent
 ```
 
@@ -95,7 +103,7 @@ openapi.json         API ugovor za web i budući Android klijent
 - Sesije su u bazi; ponovno pokretanje servera ne odjavljuje korisnika. Ograničenje pokušaja prijave je u memoriji i resetuje se restartom.
 - Mutirajući API zahtevi zahtevaju zaglavlje `X-Daily-Quest: 1`. API nema cross-origin dozvole; web aplikacija i API rade sa istog origin-a.
 
-## Pre javnog postavljanja
+## Produkcijsko održavanje
 
 Koristi produkcijske datoteke iz `deploy/README.md`: podesi postojeći HTTPS proxy, tajne, off-site backup i monitoring. Istekle sesije se čiste na sat, a administratorski reset lozinke poništava aktivne sesije. Registracija je podrazumevano zatvorena; razvojni `.env.example` uključuje je kroz `REGISTRATION_ENABLED=true`. Lozinke i tokene ne stavljati u Git. Fontovi se učitavaju sa Google Fonts, uz sistemske fallback fontove.
 
@@ -103,7 +111,7 @@ Koristi produkcijske datoteke iz `deploy/README.md`: podesi postojeći HTTPS pro
 
 1. Ponavljajući zadaci: zasebna izvršenja dnevnih/nedeljnih/mesečnih zadataka.
 2. Proširenje dnevnika ishrane po potrebi: omiljeni obroci i nutritivni podaci.
-3. Zajednički pregled „Danas”, izvoz podataka i backup.
+3. Izvoz podataka, potvrda automatizovanog off-site backup-a i probnog oporavka.
 4. Capacitor Android klijent, navigacija, bezbedno čuvanje sesije i podsetnici.
 5. Lokalno čuvanje i sinhronizacija za rad bez interneta.
 

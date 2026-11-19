@@ -1,0 +1,13 @@
+# Copy to compose.proxy.yaml on the Linode server.
+services:
+  app:
+    networks:
+      database: {}
+      edge: {}
+      proxy:
+        aliases:
+          - dailyquest-app
+networks:
+  proxy:
+    external: true
+    name: linode_default

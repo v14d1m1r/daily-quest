@@ -1098,6 +1098,10 @@
           "amount_ml": {
             "type": "integer"
           },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000
+          },
           "consumed_at": {
             "type": "string",
             "format": "date-time"
@@ -1106,6 +1110,7 @@
         "required": [
           "id",
           "amount_ml",
+          "notes",
           "consumed_at"
         ]
       },
@@ -1116,6 +1121,11 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 10000
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000,
+            "default": ""
           },
           "consumed_at": {
             "type": "string",

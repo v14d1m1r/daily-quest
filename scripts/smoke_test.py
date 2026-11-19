@@ -38,9 +38,10 @@ assert request(first, '/me')['id'] == user['id']
 request(second, '/auth/register', 'POST', {'name': 'Other', 'email': 'smoke-' + uuid.uuid4().hex + '@example.test', 'password': password})
 now = datetime.datetime.now(datetime.timezone.utc)
 date = now.astimezone(ZoneInfo('Europe/Belgrade')).date().isoformat()
-body = {'amount_ml': 250, 'consumed_at': now.isoformat()}
+body = {'amount_ml': 250, 'notes': '  Posle treninga  ', 'consumed_at': now.isoformat()}
 entry = request(first, '/water', 'POST', body, 201)
 try:
+    assert entry['notes'] == 'Posle treninga'
     summary = request(first, '/water/summary?date=' + date)
     assert summary['total_ml'] == 250 and len(summary['week']) == 7
     assert request(second, '/water/summary?date=' + date)['total_ml'] == 0
@@ -50,6 +51,7 @@ try:
     request(first, '/water/' + entry['id'], 'PUT', body)
     assert request(first, '/water/summary?date=' + date)['total_ml'] == 500
     request(first, '/water', 'POST', {**body, 'amount_ml': 0}, 400)
+    request(first, '/water', 'POST', {**body, 'notes': 'x' * 2001}, 400)
     request(first, '/water', 'POST', {**body, 'consumed_at': (now + datetime.timedelta(days=1)).isoformat()}, 400)
     request(first, '/settings', 'PUT', {'water_goal_ml': 2500, 'timezone': 'Europe/Belgrade'})
     assert request(first, '/water/summary?date=' + date)['goal_ml'] == 2500

@@ -79,11 +79,14 @@ struct Credentials {
 struct Water {
     id: Uuid,
     amount_ml: i32,
+    notes: String,
     consumed_at: DateTime<Utc>,
 }
 #[derive(Deserialize)]
 struct WaterInput {
     amount_ml: i32,
+    #[serde(default)]
+    notes: String,
     consumed_at: DateTime<Utc>,
 }
 #[derive(Deserialize)]
@@ -322,7 +325,7 @@ async fn summary(
         .ok_or_else(|| bad("Datum nije podržan."))?;
     let (start, _) = bounds(first, tz)?;
     let (_, end) = bounds(q.date, tz)?;
-    let all=sqlx::query_as::<_,Water>("SELECT id,amount_ml,consumed_at FROM water_entries WHERE user_id=$1 AND consumed_at >= $2 AND consumed_at < $3 ORDER BY consumed_at DESC").bind(user.id).bind(start).bind(end).fetch_all(&app.db).await?;
+    let all=sqlx::query_as::<_,Water>("SELECT id,amount_ml,notes,consumed_at FROM water_entries WHERE user_id=$1 AND consumed_at >= $2 AND consumed_at < $3 ORDER BY consumed_at DESC").bind(user.id).bind(start).bind(end).fetch_all(&app.db).await?;
     let week = (0..7)
         .map(|offset| {
             let date = first + Duration::days(offset);
@@ -346,9 +349,13 @@ async fn summary(
         week,
     }))
 }
-fn validate_water(input: &WaterInput) -> Result<()> {
+fn validate_water(mut input: WaterInput) -> Result<WaterInput> {
+    input.notes = input.notes.trim().to_owned();
     if !(1..=10000).contains(&input.amount_ml) {
         return Err(bad("Količina mora biti između 1 i 10000 ml."));
+    }
+    if input.notes.chars().count() > 2000 {
+        return Err(bad("Beleška može imati do 2000 znakova."));
     }
     if input.consumed_at > Utc::now() + Duration::minutes(1) {
         return Err(bad("Unos ne može biti u budućnosti."));
@@ -356,7 +363,7 @@ fn validate_water(input: &WaterInput) -> Result<()> {
     if input.consumed_at.timestamp() < 0 {
         return Err(bad("Datum mora biti posle 1970. godine."));
     }
-    Ok(())
+    Ok(input)
 }
 async fn add_water(
     State(app): State<App>,
@@ -364,8 +371,8 @@ async fn add_water(
     Json(input): Json<WaterInput>,
 ) -> Result<(StatusCode, Json<Water>)> {
     let user = current(&app, &headers).await?;
-    validate_water(&input)?;
-    let entry=sqlx::query_as::<_,Water>("INSERT INTO water_entries(id,user_id,amount_ml,consumed_at) VALUES($1,$2,$3,$4) RETURNING id,amount_ml,consumed_at").bind(Uuid::new_v4()).bind(user.id).bind(input.amount_ml).bind(input.consumed_at).fetch_one(&app.db).await?;
+    let input = validate_water(input)?;
+    let entry=sqlx::query_as::<_,Water>("INSERT INTO water_entries(id,user_id,amount_ml,notes,consumed_at) VALUES($1,$2,$3,$4,$5) RETURNING id,amount_ml,notes,consumed_at").bind(Uuid::new_v4()).bind(user.id).bind(input.amount_ml).bind(input.notes).bind(input.consumed_at).fetch_one(&app.db).await?;
     Ok((StatusCode::CREATED, Json(entry)))
 }
 async fn edit_water(
@@ -375,8 +382,8 @@ async fn edit_water(
     Json(input): Json<WaterInput>,
 ) -> Result<Json<Water>> {
     let user = current(&app, &headers).await?;
-    validate_water(&input)?;
-    let entry=sqlx::query_as::<_,Water>("UPDATE water_entries SET amount_ml=$1,consumed_at=$2 WHERE id=$3 AND user_id=$4 RETURNING id,amount_ml,consumed_at").bind(input.amount_ml).bind(input.consumed_at).bind(id).bind(user.id).fetch_optional(&app.db).await?.ok_or_else(|| Error(StatusCode::NOT_FOUND,"Unos nije pronađen.".into()))?;
+    let input = validate_water(input)?;
+    let entry=sqlx::query_as::<_,Water>("UPDATE water_entries SET amount_ml=$1,notes=$2,consumed_at=$3 WHERE id=$4 AND user_id=$5 RETURNING id,amount_ml,notes,consumed_at").bind(input.amount_ml).bind(input.notes).bind(input.consumed_at).bind(id).bind(user.id).fetch_optional(&app.db).await?.ok_or_else(|| Error(StatusCode::NOT_FOUND,"Unos nije pronađen.".into()))?;
     Ok(Json(entry))
 }
 async fn delete_water(
@@ -558,26 +565,47 @@ mod tests {
     fn rejects_invalid_water() {
         for amount_ml in [0, -1, 10001] {
             assert!(
-                validate_water(&WaterInput {
+                validate_water(WaterInput {
                     amount_ml,
+                    notes: String::new(),
                     consumed_at: Utc::now()
                 })
                 .is_err()
             );
         }
         assert!(
-            validate_water(&WaterInput {
+            validate_water(WaterInput {
                 amount_ml: 250,
+                notes: String::new(),
                 consumed_at: Utc::now() + Duration::days(1)
             })
             .is_err()
         );
         assert!(
-            validate_water(&WaterInput {
+            validate_water(WaterInput {
                 amount_ml: 250,
+                notes: String::new(),
                 consumed_at: Utc::now()
             })
             .is_ok()
+        );
+        assert!(
+            validate_water(WaterInput {
+                amount_ml: 250,
+                notes: "x".repeat(2001),
+                consumed_at: Utc::now()
+            })
+            .is_err()
+        );
+        assert_eq!(
+            validate_water(WaterInput {
+                amount_ml: 250,
+                notes: "  Posle treninga  ".into(),
+                consumed_at: Utc::now()
+            })
+            .unwrap()
+            .notes,
+            "Posle treninga"
         );
     }
 }

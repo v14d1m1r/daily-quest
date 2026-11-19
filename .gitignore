@@ -12,3 +12,5 @@ __pycache__/
 /backups/
 *.dump
 *.dump.age
+
+/compose.proxy.yaml
