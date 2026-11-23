@@ -33,6 +33,9 @@ export function Tasks({
   const [period, setPeriod] = useState<Period>("day");
   const [list, setList] = useState("all");
   const [status, setStatus] = useState("open");
+  const [search, setSearch] = useState("");
+  const [priority, setPriority] = useState("all");
+  const [sort, setSort] = useState("date");
   const [editing, setEditing] = useState<Task | null | undefined>();
   const [listEditing, setListEditing] = useState<List | null | undefined>();
   const [notice, setNotice] = useState("");
@@ -72,7 +75,25 @@ export function Tasks({
     compact ? "day" : period,
     compact ? "all" : list,
     compact ? "open" : status,
+    compact ? {} : { search, priority, sort, today },
   );
+  const scope = filterTasks(
+    tasks.data ?? [],
+    date,
+    compact ? "day" : period,
+    compact ? "all" : list,
+    "all",
+    compact ? {} : { search, priority, today },
+  );
+  const completed = scope.filter((task) => task.completed).length;
+  function resetFilters() {
+    setPeriod("all");
+    setList("all");
+    setStatus("open");
+    setSearch("");
+    setPriority("all");
+    setSort("date");
+  }
   const error =
     tasks.error ||
     lists.error ||
@@ -91,11 +112,6 @@ export function Tasks({
               {compact ? "Tvoje obaveze" : "Zadaci i liste"}{" "}
               <span className="count">{visible.length}</span>
             </h2>
-            <p>
-              {compact
-                ? "Za izabrani dan i sve ranije nezavršene obaveze."
-                : "Organizuj obaveze svojim tempom."}
-            </p>
           </div>
         </div>
         <button className="secondary" onClick={() => setEditing(null)}>
@@ -112,9 +128,11 @@ export function Tasks({
           >
             {(
               [
-                ["day", "Danas"],
-                ["week", "Ove nedelje"],
-                ["month", "Ovog meseca"],
+                ["day", date === today ? "Danas" : "Izabrani dan"],
+                ["week", "Nedelja"],
+                ["month", "Mesec"],
+                ["overdue", "Kasne"],
+                ["undated", "Bez roka"],
                 ["all", "Sve"],
               ] as const
             ).map(([key, label]) => (
@@ -122,13 +140,47 @@ export function Tasks({
                 key={key}
                 className={period === key ? "selected" : ""}
                 aria-pressed={period === key}
-                onClick={() => setPeriod(key)}
+                onClick={() => {
+                  setPeriod(key);
+                  if (key === "overdue") setStatus("open");
+                }}
               >
                 {label}
               </button>
             ))}
           </div>
           <div className="task-filters">
+            <label>
+              Pretraga
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Naziv ili beleška…"
+              />
+            </label>
+            <label>
+              Prioritet
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+              >
+                <option value="all">Svi prioriteti</option>
+                {Object.entries(priorities).map(([value, title]) => (
+                  <option key={value} value={value}>
+                    {title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Sortiranje
+              <select value={sort} onChange={(e) => setSort(e.target.value)}>
+                <option value="date">Po roku</option>
+                <option value="priority">Po prioritetu</option>
+                <option value="title">Po nazivu</option>
+              </select>
+            </label>
             <label>
               Lista
               <select value={list} onChange={(e) => setList(e.target.value)}>
@@ -145,6 +197,7 @@ export function Tasks({
               Status
               <select
                 value={status}
+                disabled={period === "overdue"}
                 onChange={(e) => setStatus(e.target.value)}
               >
                 <option value="open">Nezavršeni</option>
@@ -184,10 +237,30 @@ export function Tasks({
             )}
           </div>
           <p className="task-help">
-            {period === "all"
-              ? "Prikazani su i zadaci bez roka."
-              : `Period prema datumu ${labelDate(date)}. Uključene su ranije nezavršene obaveze. Zadaci bez roka su u „Sve“.`}
+            {period === "overdue"
+              ? `Nezavršeni zadaci sa rokom pre ${labelDate(today)}.`
+              : period === "undated"
+                ? "Zadaci kojima nije određen rok."
+                : period === "all"
+                  ? "Prikazani su i zadaci bez roka."
+                  : `Period prema datumu ${labelDate(date)}. Uključene su ranije nezavršene obaveze. Zadaci bez roka su u „Sve“.`}
           </p>
+          <button className="text-button" onClick={resetFilters}>
+            Poništi filtere
+          </button>
+          {tasks.isSuccess && lists.isSuccess && (
+            <div className="task-progress" aria-live="polite">
+              <span>
+                {scope.length - completed} nezavršenih · {completed} završenih ·{" "}
+                {scope.length} ukupno u izabranom periodu i filterima
+              </span>
+              <progress
+                aria-label="Napredak zadataka u izabranom periodu i filterima"
+                value={completed}
+                max={Math.max(1, scope.length)}
+              />
+            </div>
+          )}
         </>
       )}
       {error && (

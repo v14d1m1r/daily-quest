@@ -94,6 +94,11 @@ struct DayQuery {
     date: NaiveDate,
 }
 #[derive(Deserialize)]
+struct WaterQuery {
+    date: NaiveDate,
+    start: Option<NaiveDate>,
+}
+#[derive(Deserialize)]
 struct Settings {
     water_goal_ml: i32,
     timezone: String,
@@ -312,21 +317,26 @@ fn bounds(date: NaiveDate, tz: Tz) -> Result<(DateTime<Utc>, DateTime<Utc>)> {
 async fn summary(
     State(app): State<App>,
     headers: HeaderMap,
-    Query(q): Query<DayQuery>,
+    Query(q): Query<WaterQuery>,
 ) -> Result<Json<Summary>> {
     let user = current(&app, &headers).await?;
     let tz: Tz = user
         .timezone
         .parse()
         .map_err(|_| bad("Vremenska zona nije ispravna."))?;
-    let first = q
-        .date
-        .checked_sub_signed(Duration::days(6))
-        .ok_or_else(|| bad("Datum nije podržan."))?;
+    let first = q.start.unwrap_or(
+        q.date
+            .checked_sub_signed(Duration::days(6))
+            .ok_or_else(|| bad("Datum nije podržan."))?,
+    );
+    let days = (q.date - first).num_days() + 1;
+    if !(1..=366).contains(&days) {
+        return Err(bad("Period mora imati između 1 i 366 dana."));
+    }
     let (start, _) = bounds(first, tz)?;
     let (_, end) = bounds(q.date, tz)?;
     let all=sqlx::query_as::<_,Water>("SELECT id,amount_ml,notes,consumed_at FROM water_entries WHERE user_id=$1 AND consumed_at >= $2 AND consumed_at < $3 ORDER BY consumed_at DESC").bind(user.id).bind(start).bind(end).fetch_all(&app.db).await?;
-    let week = (0..7)
+    let week = (0..days)
         .map(|offset| {
             let date = first + Duration::days(offset);
             let total_ml = all

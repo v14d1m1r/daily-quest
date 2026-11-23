@@ -7,7 +7,13 @@ export type Task = {
   due_date: string | null;
   completed: boolean;
 };
-export type Period = "day" | "week" | "month" | "all";
+export type Period = "day" | "week" | "month" | "all" | "overdue" | "undated";
+export type TaskOptions = {
+  search?: string;
+  priority?: string;
+  sort?: string;
+  today?: string;
+};
 export function periodEnd(date: string, period: Period) {
   const d = new Date(`${date}T12:00:00Z`);
   if (period === "week")
@@ -21,7 +27,9 @@ export function filterTasks(
   period: Period,
   list: string,
   status: string,
+  options: TaskOptions = {},
 ) {
+  const search = (options.search ?? "").trim().toLocaleLowerCase("sr-Latn");
   const end = periodEnd(date, period);
   const d = new Date(`${date}T12:00:00Z`);
   if (period === "week")
@@ -31,18 +39,38 @@ export function filterTasks(
   return tasks
     .filter(
       (t) =>
+        (!search ||
+          `${t.title} ${t.notes}`
+            .toLocaleLowerCase("sr-Latn")
+            .includes(search)) &&
+        (!options.priority ||
+          options.priority === "all" ||
+          t.priority === options.priority) &&
         (list === "all" ||
           (list === "none" ? t.list_id === null : t.list_id === list)) &&
         (status === "all" ||
           (status === "done" ? t.completed : !t.completed)) &&
-        (period === "all" ||
-          (t.due_date !== null &&
-            t.due_date <= end &&
-            (!t.completed || t.due_date >= start))),
+        (period === "overdue"
+          ? !t.completed &&
+            t.due_date !== null &&
+            t.due_date < (options.today ?? date)
+          : period === "undated"
+            ? t.due_date === null
+            : period === "all" ||
+              (t.due_date !== null &&
+                t.due_date <= end &&
+                (!t.completed || t.due_date >= start))),
     )
     .sort(
       (a, b) =>
         Number(a.completed) - Number(b.completed) ||
+        (options.sort === "title"
+          ? a.title.localeCompare(b.title, "sr-Latn")
+          : 0) ||
+        (options.sort === "priority"
+          ? { high: 0, normal: 1, low: 2 }[a.priority] -
+            { high: 0, normal: 1, low: 2 }[b.priority]
+          : 0) ||
         (a.due_date ?? "9999-12-31").localeCompare(
           b.due_date ?? "9999-12-31",
         ) ||

@@ -1,4 +1,5 @@
 import { ThemeToggle } from "./ThemeToggle";
+import { WaterStats } from "./WaterStats";
 import { Tasks } from "./Tasks";
 import { api, ApiError } from "./api";
 import { Meals } from "./Meals";
@@ -385,15 +386,13 @@ function Dashboard({ user }: { user: User }) {
                       : "Tvoja dnevna doza ravnoteže."}
                 <span className="greeting-dot">✳</span>
               </h1>
-              <p>
-                {view === "today"
-                  ? "Napravi malo prostora za dobre navike."
-                  : view === "meals"
+              {(view === "meals" || view === "tasks") && (
+                <p>
+                  {view === "meals"
                     ? "Tvoj dnevnik obroka, u tvom ritmu."
-                    : view === "tasks"
-                      ? "Napravi plan i ostavi prostor za sebe."
-                      : "Čaša po čaša, kroz ceo dan."}
-              </p>
+                    : "Napravi plan i ostavi prostor za sebe."}
+                </p>
+              )}
             </div>
             <div className="date-picker">
               <button
@@ -473,7 +472,6 @@ function Dashboard({ user }: { user: User }) {
                           </span>
                           <div>
                             <h2>Voda</h2>
-                            <span>Tvoja dnevna hidratacija</span>
                           </div>
                         </div>
                         <span className="pill">
@@ -542,73 +540,7 @@ function Dashboard({ user }: { user: User }) {
                         </small>
                       )}
                     </section>
-                    <section className="panel week-card">
-                      <div className="card-top">
-                        <div>
-                          <h2>Korak po korak</h2>
-                          <p>Unos vode · poslednjih 7 dana</p>
-                        </div>
-                        <span className="trend-icon">
-                          <Droplets size={20} />
-                        </span>
-                      </div>
-                      <div className="week-summary">
-                        <strong>
-                          {liters(
-                            (data?.week.reduce((n, d) => n + d.total_ml, 0) ||
-                              0) / 7,
-                          )}{" "}
-                          <span>l / dan</span>
-                        </strong>
-                        <span>prosečan unos</span>
-                      </div>
-                      <div
-                        className="chart"
-                        aria-label="Unos vode u poslednjih sedam dana"
-                      >
-                        {data?.week.map((day) => (
-                          <button
-                            className={
-                              day.date === date
-                                ? "chart-column selected"
-                                : "chart-column"
-                            }
-                            key={day.date}
-                            onClick={() => setDate(day.date)}
-                            aria-label={`${day.date}: ${day.total_ml} ml`}
-                          >
-                            <span className="bar-value">
-                              {liters(day.total_ml)}
-                            </span>
-                            <div className="bar-track">
-                              <div
-                                className="bar"
-                                style={{
-                                  height: `${Math.max(3, (day.total_ml / Math.max(goal, ...data.week.map((d) => d.total_ml))) * 100)}%`,
-                                }}
-                              />
-                            </div>
-                            <span className="bar-day">
-                              {friendlyDate(day.date, {
-                                weekday: "short",
-                              }).replace(".", "")}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                      <div className="chart-footer">
-                        <span>
-                          <i />
-                          Dnevni unos u litrima
-                        </span>
-                        <button
-                          className="text-button"
-                          onClick={() => setModal("settings")}
-                        >
-                          Cilj: {liters(goal)} l <Pencil size={12} />
-                        </button>
-                      </div>
-                    </section>
+                    <WaterStats date={date} timezone={user.timezone} />
                   </div>
                   <section className="panel entries-card">
                     <div className="card-top">

@@ -306,7 +306,7 @@
     },
     "/water/summary": {
       "get": {
-        "summary": "Entries for selected local date and totals for trailing seven days",
+        "summary": "Entries for selected local date and daily totals from start to date (default seven days, maximum 366). The week field contains every day in the requested range.",
         "responses": {
           "200": {
             "description": "Success",
@@ -329,6 +329,12 @@
           }
         },
         "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "description": "Inclusive first local date; range must be 1 to 366 days.",
+            "schema": { "type": "string", "format": "date" }
+          },
           {
             "name": "date",
             "in": "query",
